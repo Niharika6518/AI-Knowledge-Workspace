@@ -4,6 +4,7 @@ from ..database.session import SessionLocal
 from ..database.models import User
 from ..core.security import hash_password,verify_password,create_token
 from ..schemas.auth_schema import SignupRequest,LoginRequest,TokenResponse
+from ..core.config import get_current_user
 
 router=APIRouter(prefix="/auth",tags=["Authentication"])
 
@@ -44,3 +45,9 @@ def login(request:LoginRequest,db:Session=Depends(get_db)):
 
     return { "access_token": token, 
             "token_type": "bearer"}
+
+@router.get("/profile")
+def profile(user:User=Depends(get_current_user)):
+   return {
+        "username": user.username,
+        "email": user.email}
