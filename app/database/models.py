@@ -29,3 +29,12 @@ class ChatHistory(Base):
     message=Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class DocumentChunk(Base):
+    __tablename__="documentchunks"
+
+    id=Column(Integer,index=True,primary_key=True)
+    user_id=Column(Integer,ForeignKey("users.id"))
+    document_id=Column(Integer,ForeignKey("documents.id"))
+    chunk_text=Column(Text, nullable=False)
+    embedding = Column(Text, nullable=False)
