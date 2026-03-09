@@ -2,17 +2,11 @@ from fastapi import HTTPException,Depends,APIRouter
 from sqlalchemy.orm import Session
 from ..database.session import SessionLocal
 from ..database.models import User,Document
-from ..core.config import get_current_user
+from ..core.dependencies import get_current_user
+from ..core.dependencies import get_db
 from ..schemas.chat_schema import ChatRequest
 from ..services.chat_service import ask_question
 router=APIRouter(prefix="/auth",tags=["Authentication"])
-
-def get_db():
-    db=SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.post("/ask")

@@ -4,16 +4,11 @@ from ..database.session import SessionLocal
 from ..database.models import User
 from ..core.security import hash_password,verify_password,create_token
 from ..schemas.auth_schema import SignupRequest,LoginRequest,TokenResponse
-from ..core.config import get_current_user
+from ..core.dependencies import get_current_user
+from ..core.dependencies import get_db
 
-router=APIRouter(prefix="/auth",tags=["Authentication"])
+router=APIRouter(prefix="/chat",tags=["Chat"])
 
-def get_db():
-    db=SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.post("/signup")
 def signup(request:SignupRequest,db:Session=Depends(get_db)):
