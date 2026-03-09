@@ -15,6 +15,7 @@ class Document(Base):
     id=Column(Integer,index=True,primary_key=True)
     user_id=Column(Integer,ForeignKey("users.id"))
     title=Column(String(255))
+    content=Column(Text)
     file_path=Column(String(255), nullable=True)
     document_type=Column(String(255),default="Unknown")
     upload_timestamp=Column(DateTime(timezone=True),server_default=func.now())

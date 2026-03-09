@@ -1,4 +1,4 @@
-from fastapi import FastAPI,Header,APIRouter,Depends,HTTPException
+from fastapi import Header,Depends,HTTPException
 from sqlalchemy.orm import Session
 from ..core.security import decode_token
 from ..routes.auth_routes import get_db
