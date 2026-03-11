@@ -2,18 +2,13 @@ from groq import Groq
 
 client=Groq(api_key="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")
 
-def generate_response(prompt: str):
+def generate_response(messages: list):
 
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             temperature=0,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+            messages= messages
         )
 
         return completion.choices[0].message.content

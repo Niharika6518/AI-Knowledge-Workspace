@@ -7,7 +7,7 @@ from ..schemas.auth_schema import SignupRequest,LoginRequest,TokenResponse
 from ..core.dependencies import get_current_user
 from ..core.dependencies import get_db
 
-router=APIRouter(prefix="/chat",tags=["Chat"])
+router=APIRouter(prefix="/auth",tags=["Authentication"])
 
 
 @router.post("/signup")

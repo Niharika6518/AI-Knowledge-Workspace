@@ -2,8 +2,8 @@ from pydantic import BaseModel
 from datetime import datetime
 
 class Document(BaseModel):
-    title:str
-    content:str
+    title:str |None=None
+    content:str | None=None
 
 class DocumentOut(BaseModel):
     id:int
@@ -11,4 +11,4 @@ class DocumentOut(BaseModel):
     created_at:datetime
 
     class Config:
-        orm_mode=True
+        from_attribute=True

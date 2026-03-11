@@ -20,7 +20,7 @@ def create_token(username:str)->str:
         "sub":username,
         "exp":expire
     }
-    return jwt.encode(payload,SECRET_KEY,algorithm=[ALGORITHM])
+    return jwt.encode(payload,SECRET_KEY,algorithm=ALGORITHM)
 
 def decode_token(token:str)->dict:
     try:
