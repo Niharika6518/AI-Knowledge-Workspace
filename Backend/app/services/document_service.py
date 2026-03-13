@@ -101,4 +101,3 @@ def create_document(
     db.commit()
 
     return new_doc
-

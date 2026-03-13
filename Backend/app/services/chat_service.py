@@ -6,7 +6,7 @@ from ..services.llm_service import generate_response
 import uuid
 from ..database.models import Document
 import json
-from ..agents.document_agent import run_agent
+from ..agents.tools import run_agent
 
 def get_or_create_sessionid(session_id):
     return session_id or str(uuid.uuid4())
@@ -93,7 +93,8 @@ def ask_question(
     user_id: int,
     session_id: str | None = None,
     document_id: int | None = None,
-    style: str = "normal"
+    style: str = "normal",
+    structured = None
 ):
 
     session_id = get_or_create_sessionid(session_id)
@@ -104,6 +105,7 @@ def ask_question(
 
     context_chunks = []
     rag_chunks=[]
+    structured = None
 
     if document_id:
 
