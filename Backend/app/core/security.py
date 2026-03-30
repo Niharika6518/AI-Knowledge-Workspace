@@ -1,16 +1,17 @@
 from jose import JWTError,jwt
 from passlib.context import CryptContext
 from datetime import datetime,timedelta
+import os
 
 pwd_context=CryptContext(schemes=["bcrypt"],deprecated="auto")
 
 def hash_password(password:str)->str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(password[:72])
 
 def verify_password(plain_password:str,hashed_password)->bool:
     return pwd_context.verify(plain_password,hashed_password)
 
-SECRET_KEY="MY_SECRET_KEY"
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM="HS256"
 ACCESS_TOKEN_MINUTES=60*24
 

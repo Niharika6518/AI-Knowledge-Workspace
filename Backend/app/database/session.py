@@ -1,7 +1,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base,sessionmaker
+import os
 
-URL="mysql+pymysql://root:Nanu%402002nanu@localhost/my_ai"
+URL = os.getenv("DATABASE_URL")
 engine=create_engine(URL,)
 SessionLocal=sessionmaker(bind=engine)
 Base=declarative_base()

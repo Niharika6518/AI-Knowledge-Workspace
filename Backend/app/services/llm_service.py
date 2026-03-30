@@ -1,6 +1,7 @@
 from groq import Groq
+import os
 
-client=Groq(api_key="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")
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def generate_response(messages: list):
 

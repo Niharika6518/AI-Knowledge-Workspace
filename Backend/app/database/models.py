@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey,JSON,VARCHAR
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .session import Base
 
@@ -15,6 +16,8 @@ class User(Base):
     password = Column(String(255))
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    documents = relationship("Document", back_populates="user")
+
 
 
 # ================= DOCUMENTS =================
@@ -41,6 +44,14 @@ class Document(Base):
     structured_data = Column(Text, nullable=True)
 
     upload_timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    user = relationship("User", back_populates="documents")
+
+    chunks = relationship(
+        "DocumentChunk",
+        back_populates="document",
+        cascade="all, delete-orphan"
+    )
+    
 
 
 # ================= CHAT HISTORY =================
@@ -55,8 +66,6 @@ class ChatHistory(Base):
     role = Column(String(50), nullable=False)
 
     message = Column(Text)
-
-    # UUID session id
     session_id = Column(VARCHAR(255), index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -79,3 +88,5 @@ class DocumentChunk(Base):
 
     # vector embedding stored as JSON string
     embedding = Column(JSON)
+
+    document=relationship("Document",back_populates="chunks")

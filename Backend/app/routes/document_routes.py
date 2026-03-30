@@ -28,7 +28,7 @@ def upload_document(
         "id": new_doc.id,
         "title": new_doc.title
     }
-@router.get("/doclist",response_model=List[DocumentOut])
+@router.get("/doclist")
 def doclist(db: Session = Depends(get_db),
     user: User = Depends(get_current_user)):
    doc= db.query(Document).filter(Document.user_id == user.id
@@ -42,7 +42,7 @@ def delete_document( document_id:int,db: Session = Depends(get_db),
     Doc=db.query(Document).filter(
         Document.id==document_id,
         Document.user_id == user.id
-    ).all()
+    ).first()
     if not Doc:
         raise HTTPException(status_code=404, detail="Document not found")
 

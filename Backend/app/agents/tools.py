@@ -5,9 +5,10 @@ from tavily import TavilyClient
 from ..database.models import Document
 from ..services.rag_service import retrieve_chunks
 from ..services.llm_service import generate_response
+import os
 
+tavily = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
-tavily=TavilyClient("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")
 # ================= SAFE JSON PARSER =================
 
 def safe_json_parse(response_text: str):
