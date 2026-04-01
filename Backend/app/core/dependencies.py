@@ -2,7 +2,6 @@ from fastapi import Header,Depends,HTTPException
 from sqlalchemy.orm import Session
 from ..core.security import decode_token
 from ..database.models import User
-from sqlalchemy.orm import Session
 from ..database.session import SessionLocal
 
 def get_db():
@@ -15,7 +14,7 @@ def get_db():
 def get_current_user(Authorization:str=Header(None),db:Session=Depends(get_db)):
 
  if not Authorization:
-  raise HTTPException(status_code=404,detail="Invalid or Expired Token")
+  raise HTTPException(status_code=401,detail="Invalid or Expired Token")
  
  token=Authorization.split(" ")[-1]
  payload=decode_token(token)

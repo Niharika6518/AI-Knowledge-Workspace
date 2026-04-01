@@ -1,67 +1,64 @@
 import json
 import re
+import os
 from sqlalchemy.orm import Session
 from tavily import TavilyClient
+from dotenv import load_dotenv
+
 from ..database.models import Document
 from ..services.rag_service import retrieve_chunks
 from ..services.llm_service import generate_response
-import os
 
+# ================= LOAD ENV =================
+load_dotenv()
 tavily = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
 # ================= SAFE JSON PARSER =================
-
 def safe_json_parse(response_text: str):
-
-    response_text = response_text.replace("```json", "").replace("```", "").strip()
-
-    match = re.search(r"\{.*\}", response_text, re.DOTALL)
-
-    if not match:
-        return {}
-
     try:
+        response_text = response_text.replace("```json", "").replace("```", "").strip()
+        match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        if not match:
+            return {}
         return json.loads(match.group())
-    except:
+    except Exception:
         return {}
 
 # ================= TOOL SELECTOR =================
-
 def choose_tool(question: str):
+    prompt = f"""
+You are an AI decision engine.
 
-    prompt = """
-You are a tool routing agent.
-
-Your job is to choose the correct tool.
+Select the most appropriate tool based on user intent.
 
 TOOLS:
 
-document_search
-- Use when the question refers to an uploaded document.
+1. document_search
+Use for:
+- summarizing documents
+- explaining content
+- analyzing or describing documents
 
-structured_data
--Use ONLY when asking about fields extracted from a document such as:
-name, email, skills, education, phone number, experience.
+2. structured_data
+Use ONLY if user asks for specific fields:
+(name, email, phone, skills, etc.)
 
-Do NOT use this tool if the user is asking to create or generate something.
+3. web_search
+Use for:
+- external or current information NOT in document
 
-web_search
-- Use when the question requires internet knowledge such as news, sports results, recent events, or anything not in the uploaded document.
+4. general_chat
+Use for:
+- casual conversation
 
-general_chat
--Use for general conversation, explanations, or generating content like:
-resumes, emails, cover letters, summaries, etc.
+---
+
+User Question:
+{question}
 
 IMPORTANT:
-Return ONLY JSON.
-Do NOT explain anything.
-
-Example outputs:
-
-{"tool": "document_search"}
-{"tool": "structured_data"}
-{"tool": "web_search"}
-{"tool": "general_chat"}
+Respond ONLY in valid JSON format:
+{{"tool": "one_of_the_above_tools"}}
 """
 
     messages = [
@@ -71,37 +68,52 @@ Example outputs:
 
     response = generate_response(messages)
 
-    result = safe_json_parse(response)
+    parsed = safe_json_parse(response)
 
-    return result.get("tool", "general_chat")
+    tool = parsed.get("tool")
 
+    if not tool:
+        tool = response.strip()
+
+    if tool not in ["document_search", "structured_data", "web_search", "general_chat"]:
+        tool = "general_chat"
+
+    return tool
 
 # ================= DOCUMENT SEARCH TOOL =================
-
 def document_search_tool(messages, db: Session, user_id: int, document_id: int):
 
     question = messages[-1]["content"]
 
     chunks = retrieve_chunks(document_id, question, db)
 
-    context = "\n\n".join(chunks) if chunks else "No relevant document context found."
+    if not chunks:
+        return "I could not find relevant information in the document."
 
-    messages.insert(
-        1,
-        {
-            "role": "system",
-            "content": f"Document Context:\n{context}"
-        }
-    )
+    context = "\n\n".join(chunks[:5])
 
-    return generate_response(messages)
+    system_prompt = f"""
+You are an AI assistant specialized in document understanding.
 
+STRICT RULES:
+- Answer ONLY using the provided document context
+- Do NOT add external knowledge
+- If information is missing, say "Not found in the document"
+- Keep answers clear and grounded
+
+DOCUMENT CONTEXT:
+{context}
+"""
+
+    enhanced_messages = [
+        {"role": "system", "content": system_prompt},
+        *messages
+    ]
+
+    return generate_response(enhanced_messages)
 
 # ================= STRUCTURED DATA TOOL =================
-
 def structured_data_tool(messages, db: Session, user_id: int, document_id: int):
-
-    question = messages[-1]["content"]
 
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -113,56 +125,74 @@ def structured_data_tool(messages, db: Session, user_id: int, document_id: int):
 
     structured_data = json.loads(document.structured_data)
 
-    messages.insert(
-        1,
-        {
-            "role": "system",
-            "content": f"Structured Data:\n{json.dumps(structured_data, indent=2)}"
-        }
-    )
+    system_prompt = f"""
+You are a structured data assistant.
 
-    return generate_response(messages)
+STRICT RULES:
+- Answer ONLY from the structured data
+- Do NOT guess or infer anything
 
-def web_search_tool(messages,db:Session,user_id:int,document_id:int):
-    question=messages[-1]["content"]
-    search_results=tavily.search(query=question,max_results=5)
-    context= "\n\n".join([result["content"] for result in search_results["results"]])
+STRUCTURED DATA:
+{json.dumps(structured_data, indent=2)}
+"""
 
-    messages.insert(
-        1,
-        {
-            "role": "system",
-            "content": f"Web Search Results:\n{context}"
-        }
-    )
+    enhanced_messages = [
+        {"role": "system", "content": system_prompt},
+        *messages
+    ]
 
-    return generate_response(messages)
+    return generate_response(enhanced_messages)
+
+# ================= WEB SEARCH TOOL =================
+def web_search_tool(messages, db: Session, user_id: int, document_id: int):
+
+    question = messages[-1]["content"]
+
+    try:
+        search_results = tavily.search(query=question, max_results=5)
+        context = "\n\n".join([r["content"] for r in search_results["results"]])
+    except Exception:
+        return "Web search failed."
+
+    system_prompt = f"""
+Use the following web results to answer the question accurately.
+
+WEB RESULTS:
+{context}
+"""
+
+    enhanced_messages = [
+        {"role": "system", "content": system_prompt},
+        *messages
+    ]
+
+    return generate_response(enhanced_messages)
 
 # ================= GENERAL CHAT TOOL =================
-
 def general_chat_tool(messages, db: Session, user_id: int, document_id: int):
-
     return generate_response(messages)
 
-
 # ================= AGENT EXECUTION =================
-
 def run_agent(messages, db: Session, user_id: int, document_id: int):
 
     question = messages[-1]["content"]
 
     tool = choose_tool(question)
-    print("SELECTED TOOL:", tool)
 
-    if tool == "document_search":
-        return document_search_tool(messages, db, user_id, document_id)
+    print(f"[AGENT] Question: {question}")
+    print(f"[AGENT] Selected Tool: {tool}")
 
-    elif tool == "structured_data":
-        return structured_data_tool(messages, db, user_id, document_id)
-    
-    elif tool == "web_search":
-        return web_search_tool(messages, db, user_id, document_id)
+    if tool in ["document_search", "structured_data"] and not document_id:
+        print("[AGENT] No document → switching to general_chat")
+        tool = "general_chat"
 
-    else:
-        return general_chat_tool(messages, db, user_id, document_id)
-    
+    tool_map = {
+        "document_search": document_search_tool,
+        "structured_data": structured_data_tool,
+        "web_search": web_search_tool,
+        "general_chat": general_chat_tool
+    }
+
+    selected_tool = tool_map.get(tool, general_chat_tool)
+
+    return selected_tool(messages, db, user_id, document_id)

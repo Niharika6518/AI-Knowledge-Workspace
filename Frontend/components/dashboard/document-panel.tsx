@@ -1,90 +1,50 @@
 "use client"
 
-import { useRef, useState, useEffect } from "react"
-import { Trash2 } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { FileText, Search, Trash2, Upload, X } from "lucide-react"
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://192.168.86.31:8000"
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"
 
 export default function DocumentPanel({
-  onClose,
   onDocumentSelect,
-  sessionId,
-  setSessionId
+  activeDocument,
+  onDocumentUnselect,
 }: any) {
-
-  const fileRef = useRef<HTMLInputElement>(null)
   const [documents, setDocuments] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [query, setQuery] = useState("")
 
-  /* ================= LOAD DOCUMENT LIST ================= */
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const loadDocuments = async () => {
-
-    const token = localStorage.getItem("token")
-    if (!token) {
-      console.error("No token found")
-      return
-    }
-
-    try {
-
-      const res = await fetch(`${BASE_URL}/doclist`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-
-      if (res.status === 401) {
-        console.error("Unauthorized while loading documents")
-        return
-      }
-
-      const data = await res.json()
-      setDocuments(data || [])
-
-    } catch (err) {
-      console.error("Doclist error:", err)
-    }
-  }
-
-  useEffect(() => {
-    loadDocuments()
-  }, [])
-
-  /* ================= DELETE DOCUMENT ================= */
-
-  const deleteDoc = async (id: number) => {
-
+  const fetchDocs = () => {
     const token = localStorage.getItem("token")
     if (!token) return
 
-    try {
-
-      await fetch(`${BASE_URL}/docs/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-
-      loadDocuments()
-
-    } catch (err) {
-      console.error("Delete error:", err)
-    }
+    fetch(`${BASE_URL}/documents/doclist`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => setDocuments(data || []))
+      .catch(console.error)
   }
 
-  /* ================= UPLOAD DOCUMENT ================= */
+  useEffect(() => {
+    fetchDocs()
+  }, [])
 
-  const uploadFile = async (file: File) => {
+  const handleUploadClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: any) => {
+    const file = e.target.files?.[0]
+    if (!file) return
 
     const token = localStorage.getItem("token")
-
-    if (!token) {
-      console.error("No token — cannot upload")
-      return
-    }
+    if (!token) return
 
     const formData = new FormData()
     formData.append("file", file)
@@ -93,138 +53,193 @@ export default function DocumentPanel({
     setUploading(true)
 
     try {
-
-      /* 1️⃣ Upload file */
-      const uploadRes = await fetch(`${BASE_URL}/upload_file`, {
+      const res = await fetch(`${BASE_URL}/documents/upload`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: formData
+        body: formData,
       })
 
-      if (uploadRes.status === 401) {
-        console.error("401 Unauthorized during upload")
-        setUploading(false)
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error("Upload failed:", errorText)
+        alert(`Upload failed: ${errorText}`)
         return
       }
 
-      if (!uploadRes.ok) {
-        throw new Error("Upload failed")
-      }
-
-      const uploadData = await uploadRes.json()
-
-      /* 2️⃣ Set active document */
-      const setRes = await fetch(`${BASE_URL}/user/set-active-document`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          sessionId: sessionId ?? null,
-          doc_id: uploadData.id
-        })
-      })
-
-      if (!setRes.ok) {
-        throw new Error("Failed to set active document")
-      }
-
-      const sessionData = await setRes.json()
-
-      const finalSessionId = sessionData.session_id
-
-      if (finalSessionId) {
-        setSessionId(finalSessionId)
-      }
-
-      /* 3️⃣ Save structured output to chat */
-      const structuredMessage = `📄 Document Parsed Successfully
-
-${JSON.stringify(uploadData.structured_data, null, 2)}`
-
-      await fetch(`${BASE_URL}/user/system-message`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          sessionId: finalSessionId,
-          message: structuredMessage
-        })
-      })
-
-      /* 4️⃣ Update UI */
-      onDocumentSelect({
-        id: uploadData.id,
-        title: uploadData.title
-      })
-
-      await loadDocuments()
-
+      fetchDocs()
     } catch (err) {
-      console.error("Upload process error:", err)
-    }
-
-    setUploading(false)
-
-    if (fileRef.current) {
-      fileRef.current.value = ""
+      console.error(err)
+      alert("Upload failed")
+    } finally {
+      setUploading(false)
+      e.target.value = ""
     }
   }
 
-  /* ================= UI ================= */
+  const handleDelete = async (doc: any) => {
+    const token = localStorage.getItem("token")
+    if (!token) return
+
+    const confirmed = window.confirm(`Delete "${doc.title}"?`)
+    if (!confirmed) return
+
+    setDeletingId(doc.id)
+
+    try {
+      const res = await fetch(`${BASE_URL}/documents/${doc.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to delete document")
+      }
+
+      setDocuments((prev) => prev.filter((item) => item.id !== doc.id))
+
+      if (activeDocument?.id === doc.id) {
+        onDocumentUnselect?.()
+      }
+    } catch (err) {
+      console.error(err)
+      alert("Delete failed")
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const filteredDocuments = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    if (!normalized) return documents
+
+    return documents.filter((doc: any) =>
+      (doc.title || "").toLowerCase().includes(normalized)
+    )
+  }, [documents, query])
 
   return (
-    <aside className="w-96 bg-[#171717] border-l border-gray-800 p-4 space-y-4 overflow-y-auto">
-
-      <input
-        ref={fileRef}
-        type="file"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) uploadFile(file)
-        }}
-      />
-
-      <button
-        onClick={() => fileRef.current?.click()}
-        className="w-full bg-[#2f2f2f] hover:bg-[#3a3a3a] transition p-3 rounded-lg"
-      >
-        {uploading ? "Uploading..." : "Upload Document"}
-      </button>
-
-      <div>
-        <p className="text-sm mb-2 text-gray-400">
-          Uploaded Documents
-        </p>
-
-        {documents.map((doc: any) => (
-          <div
-            key={doc.id}
-            className="bg-[#2a2a2a] p-3 mb-2 rounded-lg flex justify-between items-center"
-          >
-            <span className="truncate">{doc.title}</span>
-
-            <Trash2
-              onClick={() => deleteDoc(doc.id)}
-              className="size-4 text-red-500 cursor-pointer"
-            />
+    <div className="flex h-full w-full flex-col bg-[#0b0b12]">
+      <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.14),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))] px-6 py-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold tracking-tight text-white">
+              Documents
+            </h2>
+            <p className="mt-1 text-sm text-gray-400">
+              Upload and pick a file to chat with
+            </p>
           </div>
-        ))}
+
+          {activeDocument && (
+            <button
+              onClick={onDocumentUnselect}
+              className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs text-purple-200 transition hover:bg-purple-500/15"
+            >
+              <X size={14} />
+              Unselect
+            </button>
+          )}
+        </div>
       </div>
 
-      <button
-        onClick={onClose}
-        className="w-full border border-gray-700 rounded-lg p-2 hover:bg-[#2a2a2a]"
-      >
-        Close
-      </button>
+      <div className="space-y-4 border-b border-white/5 px-6 py-5">
+        <button
+          onClick={handleUploadClick}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] py-4 text-base font-semibold text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:-translate-y-[1px] hover:border-purple-500/30"
+        >
+          <Upload size={18} />
+          {uploading ? "Uploading..." : "Upload Document"}
+        </button>
 
-    </aside>
+        <div className="relative">
+          <Search
+            size={18}
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search documents"
+            className="w-full rounded-2xl border border-white/10 bg-white/[0.03] py-4 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-purple-500/40 focus:ring-2 focus:ring-purple-500/15"
+          />
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          hidden
+          onChange={handleFileChange}
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-5">
+        {filteredDocuments.length === 0 && (
+          <div className="mt-14 text-center text-sm text-gray-500">
+            {documents.length === 0 ? "No documents yet" : "No matching documents"}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {filteredDocuments.map((doc: any) => {
+            const isSelected = activeDocument?.id === doc.id
+            const isDeleting = deletingId === doc.id
+
+            return (
+              <div
+                key={doc.id}
+                className={[
+                  "group rounded-[24px] border p-4 transition-all duration-200",
+                  isSelected
+                    ? "border-purple-500/40 bg-[linear-gradient(135deg,rgba(168,85,247,0.18),rgba(99,102,241,0.08))] shadow-[0_18px_40px_rgba(88,28,135,0.18)]"
+                    : "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] hover:border-purple-500/25 hover:bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))]",
+                ].join(" ")}
+              >
+                <div className="flex items-start gap-3">
+                  <button
+                    onClick={() =>
+                      isSelected ? onDocumentUnselect?.() : onDocumentSelect(doc)
+                    }
+                    className="flex flex-1 items-start gap-3 text-left"
+                  >
+                    <div
+                      className={[
+                        "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border",
+                        isSelected
+                          ? "border-purple-400/30 bg-purple-500/15 text-purple-200"
+                          : "border-white/10 bg-white/5 text-gray-400",
+                      ].join(" ")}
+                    >
+                      <FileText size={18} />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="break-words text-[15px] font-semibold leading-snug text-white">
+                        {doc.title}
+                      </div>
+                      <div className="mt-1 text-sm text-gray-400">
+                        {isSelected ? "Selected for chat" : "Open in chat"}
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(doc)}
+                    disabled={isDeleting}
+                    title="Delete document"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-gray-400 opacity-100 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50 md:opacity-0 md:group-hover:opacity-100"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }
