@@ -11,3 +11,4 @@ numpy
 pdfplumber
 python-docx
 python-multipart
+pymysql
