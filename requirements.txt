@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlalchemy
+python-dotenv
+passlib[bcrypt]
+python-jose
+tavily-python
+groq
+sentence-transformers
+numpy
+pdfplumber
+python-docx
+python-multipart
